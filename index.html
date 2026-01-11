@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UNTITLED / STUDIO V6.1 (Fix)</title>
+    <style>
+        :root {
+            --bg: #ffffff;
+            --text: #000000;
+            --gray: #f2f2f2;
+            --border: #e0e0e0;
+            --font-sans: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            --font-mono: 'Courier New', Courier, monospace;
+        }
+
+        * { box-sizing: border-box; outline: none; -webkit-font-smoothing: antialiased; }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: var(--font-sans);
+            margin: 0;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* --- 页面通用 --- */
+        .page {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--bg); transition: opacity 0.4s ease, transform 0.4s ease;
+            opacity: 0; pointer-events: none; z-index: 0; display: flex; flex-direction: column;
+        }
+        .page.active { opacity: 1; pointer-events: all; z-index: 10; transform: scale(1); }
+        .page.hidden { transform: scale(0.98); }
+
+        /* --- 首页 --- */
+        #home-page { padding: 40px; justify-content: center; overflow-y: auto; }
+        .brand {
+            font-family: var(--font-mono); font-size: 14px; letter-spacing: 2px;
+            margin-bottom: 40px; text-transform: uppercase; border-bottom: 1px solid var(--text); padding-bottom: 20px;
+        }
+        .grid-container { display: grid; grid-template-columns: repeat(5, 1fr); gap: 20px; max-width: 1600px; margin: 0 auto; }
+        .card {
+            border: 1px solid var(--border); padding: 25px; cursor: pointer; transition: all 0.3s;
+            display: flex; flex-direction: column; background: white; overflow: hidden;
+        }
+        .card:hover { background: var(--text); color: var(--bg); transform: translateY(-5px); }
+        .card-header { display: flex; justify-content: space-between; margin-bottom: 20px; }
+        .card-num { font-family: var(--font-mono); font-size: 12px; opacity: 0.5; }
+        .card-title { font-size: 24px; font-weight: 400; margin: 0; }
+        .card-preview { width: 100%; height: 150px; margin-bottom: 20px; overflow: hidden; background: var(--gray); }
+        .card-preview img { width: 100%; height: 100%; object-fit: cover; filter: grayscale(100%) contrast(1.1); transition: 0.5s; }
+        .card:hover .card-preview img { filter: grayscale(0%); transform: scale(1.05); }
+        .card-desc { font-family: var(--font-mono); font-size: 10px; opacity: 0.7; line-height: 1.6; }
+
+        /* --- 编辑器 --- */
+        #editor-page { flex-direction: row; }
+        .workspace {
+            flex: 1; background: var(--gray); display: flex; justify-content: center; align-items: center; overflow: hidden;
+            background-image: linear-gradient(#e5e5e5 1px, transparent 1px), linear-gradient(90deg, #e5e5e5 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+        .canvas-wrapper { box-shadow: 0 30px 60px rgba(0,0,0,0.08); background: white; }
+        canvas { display: block; max-width: 100%; max-height: 100%; }
+
+        .toolbar { width: 320px; background: white; border-left: 1px solid var(--border); display: flex; flex-direction: column; z-index: 20; }
+        .nav-header { padding: 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 15px; }
+        .back-btn { background: none; border: none; cursor: pointer; font-size: 20px; color: #999; }
+        .back-btn:hover { color: #000; }
+        .controls-area { flex: 1; padding: 30px 20px; overflow-y: auto; }
+        .control-group { margin-bottom: 30px; }
+        .control-group label { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 11px; margin-bottom: 12px; color: #666; }
+        input[type="range"] { width: 100%; -webkit-appearance: none; background: #eee; height: 2px; }
+        input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; background: #000; cursor: pointer; }
+
+        /* Audio UI */
+        .audio-player { margin-bottom: 20px; border: 1px solid #000; padding: 15px; display: none; background: #fafafa; }
+        .audio-player.visible { display: block; }
+        .audio-info { margin-bottom: 10px; }
+        .audio-status { font-family: var(--font-mono); font-size: 10px; color: #666; display: block; margin-bottom: 4px; }
+        .waveform-mini { width: 100%; height: 30px; background: #eee; margin-bottom: 10px; position: relative; }
+        .waveform-bar { position: absolute; bottom: 0; background: #000; width: 100%; height: 0%; transition: height 0.1s; }
+        
+        .action-bar { padding: 20px; border-top: 1px solid var(--border); display: grid; gap: 10px; }
+        .btn { width: 100%; padding: 16px; border: 1px solid var(--text); background: white; color: var(--text); font-family: var(--font-mono); font-size: 12px; font-weight: bold; cursor: pointer; text-transform: uppercase; }
+        .btn:hover { background: var(--text); color: white; }
+        .btn-black { background: var(--text); color: white; border: none; }
+        .btn-small { padding: 8px; font-size: 10px; }
+        
+        #fileInput, #audioInput { display: none; }
+        
+        /* Loading Overlay */
+        #loader {
+            position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.9);
+            z-index: 100; display: flex; justify-content: center; align-items: center;
+            font-family: var(--font-mono); font-size: 12px; display: none;
+        }
+
+        @media (max-width: 1200px) { .grid-container { grid-template-columns: repeat(3, 1fr); } }
+        @media (max-width: 768px) { .grid-container { grid-template-columns: 1fr; } #editor-page { flex-direction: column-reverse; } .toolbar { width: 100%; height: 60%; } }
+    </style>
+</head>
+<body>
+
+    <div id="loader">PROCESSING AUDIO DATA...</div>
+
+    <div id="home-page" class="page active">
+        <div class="brand"><span>Untitled / Studio</span><span>Ver 6.1 (Fix)</span></div>
+        <div class="grid-container">
+            <div class="card" onclick="app.enterMode('ascii')">
+                <div class="card-header"><h2 class="card-title">ASCII</h2><div class="card-num">01</div></div>
+                <div class="card-preview"><img src="images/ascii_preview.png" onerror="this.src='https://placehold.co/600x400/eee/333?text=ASCII'" alt="ASCII"></div>
+                <div class="card-desc">Character data aesthetics.</div>
+            </div>
+            <div class="card" onclick="app.enterMode('dither')">
+                <div class="card-header"><h2 class="card-title">Dither</h2><div class="card-num">02</div></div>
+                <div class="card-preview"><img src="images/dither_preview.png" onerror="this.src='https://placehold.co/600x400/eee/333?text=DITHER'" alt="Dither"></div>
+                <div class="card-desc">1-bit noise grain.</div>
+            </div>
+            <div class="card" onclick="app.enterMode('thermal')">
+                <div class="card-header"><h2 class="card-title">Thermal</h2><div class="card-num">03</div></div>
+                <div class="card-preview"><img src="images/thermal_preview.png" onerror="this.src='https://placehold.co/600x400/eee/333?text=THERMAL'" alt="Thermal"></div>
+                <div class="card-desc">Heatmap gradient.</div>
+            </div>
+            <div class="card" onclick="app.enterMode('glitch')">
+                <div class="card-header"><h2 class="card-title">Glitch</h2><div class="card-num">04</div></div>
+                <div class="card-preview"><img src="images/glitch_preview.png" onerror="this.src='https://placehold.co/600x400/eee/333?text=GLITCH'" alt="Glitch"></div>
+                <div class="card-desc">Digital corruption.</div>
+            </div>
+            <div class="card" onclick="app.enterMode('particles')">
+                <div class="card-header"><h2 class="card-title">Particle</h2><div class="card-num">05</div></div>
+                <div class="card-preview"><img src="images/particle_preview.png" onerror="this.src='https://placehold.co/600x400/111/FFF?text=AUDIO+SYNC&font=roboto'" alt="Particle"></div>
+                <div class="card-desc">Audio-analyzed fluid particles.<br>自动音频扫描与粒子同步。</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="editor-page" class="page hidden">
+        <div class="workspace"><div class="canvas-wrapper"><canvas id="canvas"></canvas></div></div>
+        <div class="toolbar">
+            <div class="nav-header">
+                <button class="back-btn" onclick="app.goHome()">←</button>
+                <span class="current-mode-title" id="modeTitle">MODE</span>
+            </div>
+            <div class="controls-area" id="paramsContainer">
+                <div id="audioUI" class="audio-player">
+                    <div class="audio-info">
+                        <span class="audio-status" id="audioName">1. Load MP3 to Analyze</span>
+                        <span class="audio-status" id="audioAnalysisStatus">Waiting...</span>
+                    </div>
+                    <div class="waveform-mini"><div class="waveform-bar" id="audioMeter"></div></div>
+                    <div class="audio-controls">
+                        <button class="btn btn-small" onclick="document.getElementById('audioInput').click()">Load MP3</button>
+                        <button class="btn btn-small btn-black" id="playBtn" onclick="app.toggleAudio()" disabled>Play</button>
+                    </div>
+                </div>
+                <div id="sliders"></div>
+            </div>
+            <div class="action-bar">
+                <button class="btn" onclick="document.getElementById('fileInput').click()">Change Image</button>
+                <button class="btn btn-black" id="exportBtn" onclick="app.handleExport()">Export</button>
+            </div>
+        </div>
+    </div>
+
+    <input type="file" id="fileInput" accept="image/*">
+    <input type="file" id="audioInput" accept="audio/*">
+
+    <script>
+        class Particle {
+            constructor(x, y, color) {
+                this.originX = x; this.originY = y;
+                this.x = x; this.y = y;
+                this.color = color;
+                this.size = Math.random() * 1.2 + 0.8;
+            }
+        }
+
+        class StudioApp {
+            constructor() {
+                this.canvas = document.getElementById('canvas');
+                this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
+                this.img = new Image();
+                this.originalData = null;
+                this.animationId = null;
+                this.particlesArray = [];
+                
+                // Audio & Analysis
+                this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                this.audioElement = new Audio();
+                this.audioElement.crossOrigin = "anonymous";
+                this.audioElement.loop = true;
+                
+                // 自动分析数据
+                this.audioBuffer = null;
+                this.amplitudeArray = []; 
+                this.audioDuration = 0;
+                
+                // 录制相关
+                this.mediaRecorder = null;
+                this.recordedChunks = [];
+                this.isRecording = false;
+                this.destNode = this.audioCtx.createMediaStreamDestination();
+                
+                this.sourceNode = this.audioCtx.createMediaElementSource(this.audioElement);
+                this.sourceNode.connect(this.audioCtx.destination);
+                this.sourceNode.connect(this.destNode);
+
+                this.state = {
+                    mode: null,
+                    isPlaying: false,
+                    params: {
+                        ascii: { scale: 10, contrast: 1.2 }, 
+                        dither: { scale: 4, noise: 40 },
+                        thermal: { threshold: 120, bloom: 15 },
+                        glitch: { offset: 15, lines: 4 },
+                        particles: { density: 10, reaction: 50, scatter: 20 } 
+                    }
+                };
+
+                this.initEvents();
+                this.img.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='500' height='500' viewBox='0 0 500 500'%3E%3Crect width='500' height='500' fill='%23eee'/%3E%3Ccircle cx='250' cy='250' r='100' fill='%23111'/%3E%3C/svg%3E";
+                this.img.onload = () => {};
+            }
+
+            async analyzeAudioFile(file) {
+                document.getElementById('loader').style.display = 'flex';
+                document.getElementById('audioAnalysisStatus').innerText = "Scanning Amplitude...";
+                
+                const arrayBuffer = await file.arrayBuffer();
+                this.audioBuffer = await this.audioCtx.decodeAudioData(arrayBuffer);
+                this.audioDuration = this.audioBuffer.duration;
+
+                const rawData = this.audioBuffer.getChannelData(0); 
+                const sampleRate = this.audioBuffer.sampleRate;
+                const chunkSize = Math.floor(sampleRate / 60); 
+                this.amplitudeArray = [];
+                
+                let maxVal = 0;
+                let totalVal = 0;
+
+                for (let i = 0; i < rawData.length; i += chunkSize) {
+                    let sum = 0;
+                    for (let j = 0; j < chunkSize && i+j < rawData.length; j++) {
+                        sum += rawData[i + j] * rawData[i + j];
+                    }
+                    const rms = Math.sqrt(sum / chunkSize);
+                    this.amplitudeArray.push(rms);
+                    
+                    if (rms > maxVal) maxVal = rms;
+                    totalVal += rms;
+                }
+
+                this.amplitudeArray = this.amplitudeArray.map(val => val / maxVal);
+
+                let recommendedReaction = 50;
+                if (maxVal < 0.1) recommendedReaction = 90;
+                else if (maxVal > 0.8) recommendedReaction = 30;
+                else recommendedReaction = 60;
+
+                this.updateParam('reaction', recommendedReaction);
+                const slider = document.querySelector('input[data-key="reaction"]');
+                if(slider) {
+                    slider.value = recommendedReaction;
+                    document.getElementById('val-reaction').innerText = recommendedReaction + " (AUTO)";
+                }
+
+                document.getElementById('loader').style.display = 'none';
+                document.getElementById('audioAnalysisStatus').innerText = "Analysis Complete. Ready.";
+                document.getElementById('playBtn').disabled = false;
+            }
+
+            toggleAudio() {
+                if (this.audioCtx.state === 'suspended') this.audioCtx.resume();
+                if (this.state.isPlaying) {
+                    this.audioElement.pause();
+                    document.getElementById('playBtn').innerText = "PLAY";
+                } else {
+                    this.audioElement.play();
+                    document.getElementById('playBtn').innerText = "PAUSE";
+                }
+                this.state.isPlaying = !this.state.isPlaying;
+            }
+
+            enterMode(modeKey) {
+                this.state.mode = modeKey;
+                document.getElementById('home-page').classList.replace('active', 'hidden');
+                document.getElementById('editor-page').classList.replace('hidden', 'active');
+                document.getElementById('modeTitle').innerText = modeKey.toUpperCase();
+                
+                const audioUI = document.getElementById('audioUI');
+                const exportBtn = document.getElementById('exportBtn');
+                
+                if(modeKey === 'particles') {
+                    audioUI.classList.add('visible');
+                    exportBtn.innerText = "REC 2K VIDEO"; 
+                } else {
+                    audioUI.classList.remove('visible');
+                    exportBtn.innerText = "EXPORT .PNG";
+                }
+
+                this.renderControls();
+                setTimeout(() => { 
+                    this.resizeCanvas(); 
+                    if(modeKey === 'particles') {
+                        this.initParticles();
+                        this.startLoop();
+                    } else {
+                        this.stopLoop();
+                    }
+                }, 100);
+            }
+
+            goHome() {
+                this.stopLoop();
+                if(this.state.isPlaying) this.toggleAudio();
+                document.getElementById('editor-page').classList.replace('active', 'hidden');
+                document.getElementById('home-page').classList.replace('hidden', 'active');
+                this.state.mode = null;
+            }
+
+            updateParam(key, value) {
+                this.state.params[this.state.mode][key] = parseFloat(value);
+                if(this.state.mode === 'particles' && key === 'density') {
+                    this.initParticles();
+                } else if(this.state.mode !== 'particles') {
+                    requestAnimationFrame(() => this.render());
+                }
+            }
+
+            renderControls() {
+                const container = document.getElementById('sliders');
+                container.innerHTML = '';
+                const params = this.state.params[this.state.mode];
+
+                Object.keys(params).forEach(key => {
+                    const div = document.createElement('div');
+                    div.className = 'control-group';
+                    let min=1, max=100, step=1; 
+                    if(key === 'density') { min=4; max=30; step=1; } 
+                    if(key === 'reaction') { min=0; max=100; step=1; }
+                    
+                    div.innerHTML = `
+                        <label><span>${key.toUpperCase()}</span><span id="val-${key}">${params[key]}</span></label>
+                        <input type="range" data-key="${key}" min="${min}" max="${max}" step="${step}" value="${params[key]}">
+                    `;
+                    div.querySelector('input').addEventListener('input', e => {
+                        document.getElementById(`val-${key}`).innerText = e.target.value;
+                        this.updateParam(key, e.target.value);
+                    });
+                    container.appendChild(div);
+                });
+            }
+
+            resizeCanvas(forceW, forceH) {
+                if(!this.img.width) return;
+                let w = forceW || this.img.width;
+                let h = forceH || this.img.height;
+                
+                if (!forceW) {
+                    const maxDisplay = 1000;
+                    if (w > maxDisplay || h > maxDisplay) {
+                        const ratio = w / h;
+                        if (w > h) { w = maxDisplay; h = maxDisplay / ratio; }
+                        else { h = maxDisplay; w = maxDisplay * ratio; }
+                    }
+                }
+
+                this.canvas.width = w; this.canvas.height = h;
+                this.ctx.drawImage(this.img, 0, 0, w, h);
+                this.originalData = this.ctx.getImageData(0, 0, w, h);
+                
+                // 修复：确保调用渲染函数
+                if(this.state.mode !== 'particles') this.render();
+            }
+
+            // --- 核心修复：找回丢失的 Render 路由函数 ---
+            render() {
+                if (!this.originalData || this.state.mode === 'particles') return;
+                const w = this.canvas.width; const h = this.canvas.height;
+                
+                // 清空画布并填充白色背景
+                this.ctx.fillStyle = '#ffffff'; 
+                this.ctx.fillRect(0, 0, w, h);
+                this.ctx.fillStyle = '#000000';
+
+                // 根据模式调用不同的绘图函数
+                switch(this.state.mode) {
+                    case 'ascii': this.drawAscii(w, h); break;
+                    case 'dither': this.drawDither(w, h); break;
+                    case 'thermal': this.drawThermal(w, h); break;
+                    case 'glitch': this.drawGlitch(w, h); break;
+                }
+            }
+
+            initParticles() {
+                this.particlesArray = [];
+                let density = this.state.params.particles.density;
+                
+                const w = this.canvas.width;
+                const h = this.canvas.height;
+
+                if (w > 2000) {
+                    const totalPixels = w * h;
+                    const targetCount = 25000; 
+                    const smartDensity = Math.floor(Math.sqrt(totalPixels / targetCount));
+                    density = Math.max(density, smartDensity); 
+                }
+
+                const data = this.originalData.data;
+
+                for (let y = 0; y < h; y += density) {
+                    for (let x = 0; x < w; x += density) {
+                        const index = (y * w + x) * 4;
+                        if (index >= data.length) continue;
+                        
+                        const r = data[index];
+                        const g = data[index+1];
+                        const b = data[index+2];
+                        const brightness = (r+g+b)/3;
+                        
+                        if (brightness < 245) { 
+                            this.particlesArray.push(new Particle(x, y, `rgb(${r},${g},${b})`));
+                        }
+                    }
+                }
+            }
+
+            startLoop() {
+                if(this.animationId) cancelAnimationFrame(this.animationId);
+                const loop = () => {
+                    this.renderParticles();
+                    this.animationId = requestAnimationFrame(loop);
+                };
+                loop();
+            }
+
+            stopLoop() {
+                if(this.animationId) cancelAnimationFrame(this.animationId);
+            }
+
+            renderParticles() {
+                const w = this.canvas.width;
+                const h = this.canvas.height;
+                const p = this.state.params.particles;
+
+                this.ctx.fillStyle = 'rgba(0, 0, 0, 0.4)'; 
+                this.ctx.fillRect(0, 0, w, h);
+
+                let currentAmp = 0;
+                if(this.state.isPlaying && this.amplitudeArray.length > 0) {
+                    const frameIndex = Math.floor(this.audioElement.currentTime * 60);
+                    if(this.amplitudeArray[frameIndex]) {
+                        currentAmp = this.amplitudeArray[frameIndex];
+                    }
+                    document.getElementById('audioMeter').style.height = (currentAmp * 100) + "%";
+                }
+
+                const reactionForce = currentAmp * (p.reaction * 2);
+                const scatter = p.scatter;
+
+                for (let i = 0; i < this.particlesArray.length; i++) {
+                    const part = this.particlesArray[i];
+                    
+                    let dx = part.originX - part.x;
+                    let dy = part.originY - part.y;
+                    
+                    part.x += dx * 0.15;
+                    part.y += dy * 0.15;
+
+                    if (reactionForce > 2) {
+                        const shift = Math.sin(part.y * 0.02 + Date.now() * 0.003) * reactionForce * 0.3;
+                        const noiseX = (Math.random() - 0.5) * scatter * currentAmp;
+                        const noiseY = (Math.random() - 0.5) * scatter * currentAmp;
+                        
+                        part.x += shift + noiseX;
+                        part.y -= (reactionForce * 0.2) + noiseY;
+                    }
+
+                    this.ctx.fillStyle = part.color;
+                    const baseSize = w > 2000 ? (part.size * 2.5) : part.size;
+                    const size = baseSize * (1 + currentAmp * 0.5); 
+                    this.ctx.fillRect(part.x, part.y, size, size);
+                }
+            }
+
+            handleExport() {
+                if (this.state.mode === 'particles') this.toggleRecording();
+                else this.downloadImage();
+            }
+
+            toggleRecording() {
+                const btn = document.getElementById('exportBtn');
+                if (this.isRecording) {
+                    this.mediaRecorder.stop();
+                    this.isRecording = false;
+                    btn.innerText = "SAVING...";
+                    setTimeout(() => {
+                         this.resizeCanvas();
+                         this.initParticles();
+                         btn.innerText = "REC 2K VIDEO";
+                    }, 1000);
+                } else {
+                    if (!this.state.isPlaying) { alert("Please PLAY music first."); return; }
+                    if (this.amplitudeArray.length === 0) { alert("Please wait for audio analysis."); return; }
+
+                    this.resizeCanvas(2560, 1440);
+                    this.initParticles();
+
+                    const canvasStream = this.canvas.captureStream(60); 
+                    const audioTrack = this.destNode.stream.getAudioTracks()[0];
+                    const finalStream = new MediaStream([canvasStream.getVideoTracks()[0], audioTrack]);
+
+                    try {
+                        this.mediaRecorder = new MediaRecorder(finalStream, { 
+                            mimeType: 'video/webm; codecs=vp9', 
+                            videoBitsPerSecond: 10000000
+                        });
+                    } catch (e) {
+                        this.mediaRecorder = new MediaRecorder(finalStream);
+                    }
+
+                    this.recordedChunks = [];
+                    this.mediaRecorder.ondataavailable = e => { if (e.data.size > 0) this.recordedChunks.push(e.data); };
+                    this.mediaRecorder.onstop = () => {
+                        const blob = new Blob(this.recordedChunks, { type: 'video/webm' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `untitled_studio_2k_${Date.now()}.webm`;
+                        a.click();
+                    };
+
+                    this.mediaRecorder.start();
+                    this.isRecording = true;
+                    btn.innerText = "STOP (2K REC)";
+                    btn.style.background = "#ff0000";
+                    btn.style.color = "#fff";
+                }
+            }
+
+            downloadImage() {
+                const link = document.createElement('a');
+                link.download = `untitled_studio_${this.state.mode}.png`;
+                link.href = this.canvas.toDataURL();
+                link.click();
+            }
+
+            initEvents() {
+                document.getElementById('fileInput').addEventListener('change', e => {
+                   if(e.target.files[0]) {
+                        const reader = new FileReader();
+                        reader.onload = evt => {
+                            this.img = new Image();
+                            this.img.onload = () => { 
+                                this.resizeCanvas(); 
+                                if(this.state.mode === 'particles') this.initParticles();
+                            };
+                            this.img.src = evt.target.result;
+                        };
+                        reader.readAsDataURL(e.target.files[0]);
+                    }
+                });
+
+                document.getElementById('audioInput').addEventListener('change', e => {
+                    if(e.target.files[0]) {
+                        const file = e.target.files[0];
+                        document.getElementById('audioName').innerText = file.name.substring(0, 20) + "...";
+                        
+                        const url = URL.createObjectURL(file);
+                        this.audioElement.src = url;
+                        this.audioElement.load();
+                        
+                        this.analyzeAudioFile(file);
+                    }
+                });
+            }
+
+            drawAscii(w, h) {
+                const p = this.state.params.ascii; const chars = " .:-=+*#%@"; const step = Math.floor(p.scale); 
+                this.ctx.font = `bold ${step + 2}px monospace`; this.ctx.textBaseline = 'top';
+                for(let y=0; y<h; y+=step) {
+                    for(let x=0; x<w; x+=step) {
+                        const i = (y*w + x)*4; if(i >= this.originalData.data.length) continue;
+                        const avg = (this.originalData.data[i]+this.originalData.data[i+1]+this.originalData.data[i+2])/3;
+                        let val = 1 - (avg/255); val = (val - 0.5) * p.contrast + 0.5; val = Math.max(0, Math.min(1, val));
+                        if(val > 0.05) { const charIdx = Math.floor(val * (chars.length-1)); this.ctx.fillText(chars[charIdx], x, y); }
+                    }
+                }
+            }
+            drawDither(w, h) {
+                const p = this.state.params.dither; const idata = this.ctx.createImageData(w, h); const d = idata.data; const scale = Math.floor(p.scale);
+                for(let y=0; y<h; y+=scale) {
+                    for(let x=0; x<w; x+=scale) {
+                        const i = (y*w + x)*4; if(i >= this.originalData.data.length) continue;
+                        const gray = (this.originalData.data[i] + this.originalData.data[i+1] + this.originalData.data[i+2])/3;
+                        const noise = (Math.random()-0.5) * p.noise;
+                        if ((gray + noise) < 128) {
+                            for(let py=0; py<scale && y+py<h; py++){ for(let px=0; px<scale && x+px<w; px++){
+                                const idx = ((y+py)*w + x+px)*4; d[idx] = 0; d[idx+1] = 0; d[idx+2] = 0; d[idx+3] = 255;
+                            }}
+                        }
+                    }
+                }
+                this.ctx.putImageData(idata, 0, 0);
+            }
+            drawThermal(w, h) {
+                const p = this.state.params.thermal; const idata = this.ctx.createImageData(w, h); const src = this.originalData.data; const dest = idata.data;
+                for(let i=0; i<src.length; i+=4) {
+                    const avg = (src[i] + src[i+1] + src[i+2])/3; const val = Math.max(0, (255-avg) - (255 - p.threshold*2));
+                    if (val < 10) { dest[i]=255; dest[i+1]=255; dest[i+2]=255; dest[i+3]=255; } 
+                    else { dest[i] = 255 - val * 3; dest[i+1] = 255 - val * 0.5; dest[i+2] = 255 - val; dest[i+3] = 255; }
+                }
+                this.ctx.putImageData(idata, 0, 0);
+                if(p.bloom > 5) {
+                    this.ctx.save(); this.ctx.globalCompositeOperation = 'darken'; this.ctx.filter = `blur(${p.bloom}px)`;
+                    createImageBitmap(idata).then(bmp => { this.ctx.drawImage(bmp, 0, 0); this.ctx.restore(); });
+                }
+            }
+            drawGlitch(w, h) {
+                const p = this.state.params.glitch; this.ctx.drawImage(this.img, 0, 0, w, h);
+                const idata = this.ctx.getImageData(0,0,w,h); const dest = this.ctx.createImageData(w,h); const src = idata.data; const d = dest.data; const off = Math.floor(p.offset);
+                for(let i=0; i<src.length; i+=4) {
+                    d[i] = src[i+4*off] || src[i]; d[i+1] = src[i]; d[i+2] = src[i-4*off] || src[i+2]; d[i+3] = 255;
+                }
+                this.ctx.putImageData(dest, 0, 0); this.ctx.fillStyle = "rgba(0,0,0,0.2)";
+                const lineH = Math.floor(p.lines); for(let y=0; y<h; y+=lineH*2) { this.ctx.fillRect(0, y, w, lineH); }
+            }
+        }
+        const app = new StudioApp();
+    </script>
+</body>
+</html>
